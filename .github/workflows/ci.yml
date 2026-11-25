@@ -1,0 +1,43 @@
+name: Tests and secret scan
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  tests:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ['3.10', '3.13']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m unittest discover -s tests -v
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify Gitleaks download and scan all history
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=8.30.1
+          tool_dir=$(mktemp -d)
+          cd "$tool_dir"
+          base="https://github.com/gitleaks/gitleaks/releases/download/v$version"
+          curl --fail --silent --show-error --location "$base/gitleaks_${version}_linux_x64.tar.gz" -o tool.tar.gz
+          curl --fail --silent --show-error --location "$base/gitleaks_${version}_checksums.txt" -o checksums.txt
+          expected=$(awk -v name="gitleaks_${version}_linux_x64.tar.gz" '$2 == name {print $1}' checksums.txt)
+          test -n "$expected"
+          echo "$expected  tool.tar.gz" | sha256sum --check
+          tar -xzf tool.tar.gz gitleaks
+          cd "$GITHUB_WORKSPACE"
+          "$tool_dir/gitleaks" git --redact --log-opts="--all" .
+          "$tool_dir/gitleaks" dir --redact .

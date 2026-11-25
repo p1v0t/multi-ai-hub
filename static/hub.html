@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="utf-8"><title>Multi-AI Hub</title>
+<style>
+body{font-family:system-ui,Segoe UI,sans-serif;background:#14161a;color:#e6e6e6;margin:0;padding:20px}
+h1{margin:0 0 4px;font-size:20px}.sub{color:#9aa;font-size:13px;margin-bottom:16px}
+.cols{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.col{background:#1d2026;border-radius:8px;padding:10px;min-height:200px}
+.col h2{font-size:14px;margin:0 0 8px;color:#bcd}
+.t{background:#262a31;border-radius:6px;padding:8px;margin-bottom:8px;font-size:13px}
+.t b{color:#fff}.ia{display:inline-block;padding:1px 6px;border-radius:4px;font-size:11px;margin-left:4px}
+.codex{background:#2d6a4f}.grok{background:#5a3d8a}.claude{background:#9a5b2a}
+.muted{color:#8a9;font-size:12px}button{background:#33404f;color:#fff;border:0;border-radius:6px;padding:6px 12px;cursor:pointer}
+.err{color:#f88}.fase{margin:8px 0 2px;font-weight:600;color:#cde}.it{font-size:13px;padding:2px 0}.st{display:inline-block;width:92px;font-size:11px;border-radius:4px;padding:1px 4px;margin-right:6px;text-align:center}
+.s-ok{background:#2d6a4f}.s-run{background:#8a6d1a}.s-rev{background:#3a5a8a}.s-fila{background:#444}.s-nao{background:#2a2d33;color:#999}.s-voce{background:#8a3a3a}a{color:#9cf}
+</style></head><body>
+<h1>Multi-AI Hub</h1>
+<div class="sub">Claude coordena · Grok web planeja / Grok CLI executa · Codex executa</div>
+<div><span id="auto"></span> <button id="bt"></button> <span id="err" class="err"></span></div><br>
+<div class="col" style="margin-bottom:12px"><h2>Checklist do plano</h2><div id="check"></div></div>
+<div class="cols">
+ <div class="col"><h2>Fila</h2><div id="fila"></div></div>
+ <div class="col"><h2>Em execução</h2><div id="execucao"></div></div>
+ <div class="col"><h2>Revisão do Claude</h2><div id="revisao"></div></div>
+ <div class="col"><h2>Aprovadas</h2><div id="aprovadas"></div></div>
+</div>
+<script>
+const localToken=__LOCAL_TOKEN_JSON__;
+const localFetch=(url, options={})=>fetch(url,{...options,headers:{...options.headers,'X-Local-Token':localToken}});
+let auto=true;
+function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function card(t){const d=document.createElement('div');d.className='t';
+ d.innerHTML=`<b>${esc(t.id)}</b><span class="ia ${esc(t.executor)}">${esc(t.executor)}</span><br>${esc(t.titulo||t.erro)}`+
+ (t.devolucoes?`<div class="muted">devoluções: ${esc(t.devolucoes)}</div>`:'')+
+ (t.depende&&t.depende.length?`<div class="muted">depende: ${esc(t.depende.join(', '))}</div>`:'')+
+ (t.fim_motivo?`<div class="muted">${esc(t.fim_motivo)}</div>`:'');return d;}
+async function carregar(){try{const r=await localFetch('/api/hub');const d=await r.json();
+ for(const k of ['fila','execucao','revisao','aprovadas']){const el=document.getElementById(k);el.innerHTML='';
+  (d[k]||[]).slice(k==='aprovadas'?-30:0).forEach(t=>el.appendChild(card(t)));}
+ auto=!!d.auto;document.getElementById('auto').textContent=auto?'Despacho automático: LIGADO':'Despacho automático: PAUSADO';
+ document.getElementById('bt').textContent=auto?'Pausar':'Retomar';
+ document.getElementById('err').textContent=d.erro||'';}catch(e){document.getElementById('err').textContent=String(e);}}
+document.getElementById('bt').onclick=async()=>{if(!auto&&!confirm('Retomar permite que os CLIs executem as tarefas da fila no projeto configurado. Continuar?'))return;await localFetch('/api/hub/'+(auto?'pausar':'retomar'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirm:true})});carregar();};
+function check(d){const el=document.getElementById('check');el.innerHTML='';const c=d.checklist;if(!c)return;
+ const onde={};for(const k of ['fila','execucao','revisao','aprovadas'])(d[k]||[]).forEach(t=>onde[t.id]=k);
+ let tot=0,ok=0;
+ c.fases.forEach(f=>{const h=document.createElement('div');h.className='fase';h.textContent=f.nome;el.appendChild(h);
+  f.itens.forEach(i=>{let st='s-nao',tx='não iniciado';tot++;
+   if(i.tarefas){const e=i.tarefas.map(x=>onde[x]);
+    if(e.every(x=>x==='aprovadas')){st='s-ok';tx='feito'}
+    else if(e.some(x=>x==='execucao')){st='s-run';tx='em execução'}
+    else if(e.some(x=>x==='revisao')){st='s-rev';tx='em revisão'}
+    else if(e.some(x=>x==='fila')){st='s-fila';tx='na fila'}}
+   else if(i.feito){st='s-ok';tx='feito'}
+   if(i.voce){st='s-voce';tx='depende de você'}
+   if(st==='s-ok')ok++;
+   const r=document.createElement('div');r.className='it';
+   r.innerHTML=`<span class="st ${st}">${tx}</span>${esc(i.txt)}`+(i.tarefas?` <span class="muted">(${esc(i.tarefas.join(', '))})</span>`:'')+(i.obs?` <span class="muted">— ${esc(i.obs)}</span>`:'');el.appendChild(r);});});
+ const t=document.createElement('div');t.className='muted';t.style.marginTop='6px';t.textContent=`Progresso: ${ok} de ${tot} itens feitos`;el.prepend(t);}
+const _c=carregar;carregar=async function(){await _c();try{const r=await localFetch('/api/hub');check(await r.json());}catch(e){}};
+carregar();setInterval(carregar,10000);
+</script></body></html>
