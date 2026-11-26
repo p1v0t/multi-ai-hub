@@ -1,5 +1,104 @@
 # Multi-AI Hub
 
+**Coordinate AI coding tasks from a local dashboard, with dependencies, cooperative file locks, backups and review.**
+
+[English](#english) · [Português](#português) · [Report a bug](https://github.com/p1v0t/multi-ai-hub/issues) · [Security](SECURITY.md)
+
+Python 3.10+ · Standard library only · Claude / Codex / Grok CLI workflows · Starts paused
+
+## English
+
+Multi-AI Hub helps coordinate work across Claude, Codex and Grok CLI workflows on a local project. Queue tasks, declare the files they concern, wait for dependencies and review results before approval. It is a standalone public edition without private project data or history.
+
+### What it helps you manage
+
+| Need | Built-in workflow |
+| --- | --- |
+| Divide work between AI tools | Tasks with an executor, instructions and declared files |
+| Avoid conflicting edits | Cooperative locks and a conflict check before dispatch |
+| Control task order | Dependencies are released only after approval |
+| Keep recovery copies | Backups of explicitly listed files and folders before dispatch |
+| Review completed work | Cross-review tasks, approval and return-for-correction actions |
+
+```mermaid
+flowchart LR
+    Q["Queue"] --> D["Dependencies"]
+    D --> C["Conflict check + backup"]
+    C --> E["Executor"]
+    E --> R["Review"]
+    R --> A["Approval"]
+```
+
+The executor must acquire its own session locks before editing. Cooperative locks are agreements between agents, not an operating-system sandbox or access-control boundary.
+
+### Quick start on Windows
+
+**Requirements:** Python 3.10+, Git, and the provider CLIs you intend to use, installed and authenticated separately. Provider tools, credentials and subscriptions are not included. The hub itself has no external Python package dependencies.
+
+Clone this repository:
+
+```powershell
+git clone https://github.com/p1v0t/multi-ai-hub.git
+cd multi-ai-hub
+```
+
+Choose an **existing test project** and a separate private state directory. Replace the example project path with your own:
+
+```powershell
+$env:AI_HUB_PROJECT = (Resolve-Path 'D:\projects\demo').Path
+$env:AI_HUB_HOME = Join-Path $env:LOCALAPPDATA 'MultiAIHub\demo'
+py -3 server.py
+```
+
+The dashboard opens at **http://127.0.0.1:8766** and starts **paused on every launch**. Review the queue, configured commands and CLI permissions before resuming. Use `AI_HUB_PORT` for a different port.
+
+On Linux/macOS, set `AI_HUB_PROJECT` and `AI_HUB_HOME` with `export`, using absolute paths, and start with `python3 server.py`. Keep the state directory outside both the target project and this installation.
+
+### Example task
+
+In a terminal with the same environment variables, create a review task for a file that exists in your test project:
+
+```powershell
+py -3 hub.py nova --id TASK-001 --titulo "Review example module" --executor codex --arquivos src/demo.py --instrucoes "Review only the specified module and document findings" --regressao "python -m unittest discover -s tests"
+py -3 hub.py estado
+```
+
+The file and regression command above are examples; adapt them to your project and Python launcher. Resume from the dashboard when ready to execute. The interface and CLI commands currently use Portuguese names.
+
+A completed task moves to review. The coordinator can approve it or return it with feedback. Use `--depende TASK-000` to declare a dependency. See the Portuguese reference below for approval, correction and lock commands.
+
+### Controls and limits
+
+- **Pausing stops new dispatches.** Already running tasks continue. Closing the dashboard does not automatically terminate all child processes.
+- **Review CLI commands first.** The private `hub_config.json` in `AI_HUB_HOME` can launch programs with your permissions. Codex defaults to `workspace-write`.
+- **Use one dispatcher per state directory.** Use separate `AI_HUB_HOME` directories for different projects.
+- **Acquire and renew cooperative locks.** Executors use a unique session name; locks expire after 60 minutes by default.
+- **Backups cover declared paths.** Files discovered later by an executor are not automatically backed up by the hub. A backup failure prevents dispatch.
+- **Keep runtime data private.** Prompts, logs, outputs, reviews and backups may contain private code or data and do not belong in a public repository.
+- **Windows command wrappers are restricted.** `.cmd` and `.bat` executables are rejected; use native executables or explicitly configure the interpreter and entry script. Preserve CLI permission controls.
+
+### Validation and feedback
+
+```powershell
+py -3 -m unittest discover -s tests -v
+```
+
+Tests use temporary directories, loopback HTTP and a synthetic Python executor. They do not authenticate to providers or start real AI tools. CI runs on Windows/Linux and checks for secrets with Gitleaks. Read [SECURITY.md](SECURITY.md).
+
+[Report a problem](https://github.com/p1v0t/multi-ai-hub/issues) with your OS, Python version, reproduction steps and expected result. Remove credentials and private project data before posting; follow the security policy for security reports.
+
+### Optional Grok web bridge
+
+[Grok CLI ↔ Web Bridge](https://github.com/p1v0t/grok-cli-web-bridge) is a separate program for importing web conversations and reviewing selected CLI messages before sending them to grok.com. Its web planning requires separate authorization; starting the hub does not automatically send conversations. See the Portuguese reference for optional integration settings.
+
+**License:** this publication does not include an additional software license. Public source availability alone does not grant an open-source license.
+
+---
+
+## Português
+
+**Organize tarefas entre IAs pelo painel local, com dependências, travas cooperativas, backups e revisão.**
+
 Coordenador local de tarefas para Claude, Codex e Grok CLI, com fila, dependências, travas cooperativas, backups e revisão cruzada. Edição pública independente, sem dados ou histórico de projetos privados. Python 3.10+; biblioteca padrão, sem pacotes Python externos.
 
 ## Começar no Windows
